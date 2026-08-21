@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Portfolio note on diagnosing AI agent failures in terminal-based tasks and turning them into workflow improvements.">
-  <title>把 Agent 的失败变成可诊断、可迭代的问题</title>
+  <meta name="description" content="TB2 Diagnostics deep dive on diagnosing AI agent failures in terminal-based tasks and turning them into workflow improvements.">
+  <title>TB2 Diagnostics — Diagnosis Walkthrough</title>
   <style>
     :root {
       color-scheme: light;
@@ -50,6 +50,11 @@
 
     a:hover { color: #27465f; }
 
+    :focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 4px;
+    }
+
     h1, h2, h3, p { margin-top: 0; }
 
     .page {
@@ -68,39 +73,88 @@
 
     .nav {
       width: min(var(--max), calc(100% - 40px));
-      min-height: 58px;
+      min-height: 72px;
       margin: 0 auto;
-      display: flex;
+      display: grid;
+      grid-template-columns: auto minmax(220px, 1fr) auto;
       align-items: center;
-      justify-content: space-between;
-      gap: 20px;
+      gap: clamp(20px, 4vw, 48px);
     }
 
-    .brand {
-      color: var(--ink);
-      font-size: 0.92rem;
-      font-weight: 650;
+    .project-back {
+      color: var(--muted);
+      font-size: 0.74rem;
+      letter-spacing: 0.06em;
       text-decoration: none;
+    }
+
+    .project-back:hover { color: var(--blue); }
+
+    .project-identity {
+      display: grid;
+      gap: 1px;
+    }
+
+    .project-identity strong {
+      color: var(--ink);
+      font-size: 0.76rem;
+      letter-spacing: 0.13em;
+    }
+
+    .project-identity span {
+      color: var(--muted);
+      font-size: 0.68rem;
     }
 
     .nav-links {
       display: flex;
       flex-wrap: wrap;
-      gap: 16px;
+      gap: clamp(16px, 2.5vw, 30px);
       justify-content: flex-end;
-      font-size: 0.84rem;
+      font-size: 0.78rem;
     }
 
     .nav-links a {
+      position: relative;
+      display: inline-flex;
+      min-height: 42px;
+      align-items: center;
+      padding: 4px 0;
       color: var(--muted);
       text-decoration: none;
+      white-space: nowrap;
     }
 
-    .nav-links a:hover { color: var(--blue); }
+    .nav-links a::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      height: 2px;
+      background: var(--gold);
+      transform: scaleX(0);
+      transform-origin: right;
+      transition: transform 0.2s ease;
+    }
+
+    .nav-links a:hover,
+    .nav-links a[aria-current="page"] { color: var(--ink); }
+
+    .nav-links a:hover::after,
+    .nav-links a[aria-current="page"]::after {
+      transform: scaleX(1);
+      transform-origin: left;
+    }
+
+    .nav-links .external-link { font-weight: 500; }
+
+    .nav-links .external-link::after { background: var(--line); }
 
     .section {
       padding: clamp(54px, 8vw, 96px) 0;
       border-top: 1px solid var(--line);
+      scroll-margin-top: 88px;
     }
 
     .section:first-of-type { border-top: 0; }
@@ -178,9 +232,47 @@
       grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
       gap: clamp(32px, 6vw, 72px);
       align-items: center;
-      min-height: calc(100vh - 58px);
-      padding: clamp(44px, 7vw, 92px) 0;
+      min-height: auto;
+      padding: clamp(54px, 7vw, 80px) 0 clamp(44px, 6vw, 68px);
     }
+
+    .hero h1 { font-size: clamp(2.15rem, 4.5vw, 3.75rem); }
+
+    .page-toc {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 62px;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .page-toc > span {
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 650;
+      letter-spacing: 0.1em;
+    }
+
+    .page-toc div {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: clamp(18px, 4vw, 42px);
+    }
+
+    .page-toc a {
+      display: inline-flex;
+      min-height: 44px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .page-toc a:hover { color: var(--blue); }
 
     .actions {
       display: flex;
@@ -484,6 +576,16 @@
     .footnote a:hover { color: var(--blue); }
 
     @media (max-width: 860px) {
+      .nav {
+        grid-template-columns: auto minmax(0, 1fr);
+      }
+
+      .nav-links {
+        grid-column: 1 / -1;
+        justify-content: flex-start;
+        border-top: 1px solid var(--line-soft);
+      }
+
       .hero,
       .validation {
         grid-template-columns: 1fr;
@@ -509,15 +611,35 @@
 
       .nav {
         align-items: flex-start;
-        flex-direction: column;
-        padding: 12px 0;
+        gap: 8px 18px;
+        padding: 10px 0 0;
       }
+
+      .project-identity span { display: none; }
 
       .nav-links {
         width: 100%;
-        justify-content: space-between;
-        gap: 10px;
+        flex-wrap: nowrap;
+        gap: 20px;
+        overflow-x: auto;
       }
+
+      .nav-links a { min-height: 46px; }
+
+      .page-toc {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 2px;
+        padding: 14px 0 8px;
+      }
+
+      .page-toc div {
+        width: 100%;
+        justify-content: flex-start;
+        gap: 22px;
+      }
+
+      .section { scroll-margin-top: 132px; }
 
       .actions,
       .footnote-inner {
@@ -535,13 +657,16 @@
 </head>
 <body>
   <header class="topbar">
-    <nav class="nav" aria-label="Primary navigation">
-      <a class="brand" href="#top">Deep Agents Failure Diagnosis Note</a>
+    <nav class="nav" aria-label="TB2 project views">
+      <a class="project-back" href="https://mogwai911.github.io/work/">← Projects</a>
+      <div class="project-identity">
+        <strong>TB2 DIAGNOSTICS</strong>
+        <span>Agent Failure Diagnosis System</span>
+      </div>
       <div class="nav-links">
-        <a href="#roadmap">Roadmap</a>
-        <a href="#mapping">Mapping</a>
-        <a href="#validation">Validation</a>
-        <a data-repo-link href="README.md">GitHub</a>
+        <a href="https://mogwai911.github.io/projects/tb2-diagnostics/">Overview</a>
+        <a href="https://mogwai911.github.io/agent-failure-diagnosis-case-study/" aria-current="page">Diagnosis Walkthrough</a>
+        <a class="external-link" data-repo-link href="https://github.com/mogwai911/agent-failure-diagnosis-case-study">GitHub ↗</a>
       </div>
     </nav>
   </header>
@@ -549,7 +674,7 @@
   <main id="top" class="page">
     <section class="hero" aria-labelledby="hero-title">
       <div>
-        <p class="eyebrow">Portfolio note · Deep Agents / Terminal-Bench</p>
+        <p class="eyebrow">Deep Dive · Failure Diagnosis</p>
         <h1 id="hero-title">
           把 Agent 的失败变成可诊断、可迭代的问题
           <span class="subtitle">Turning scattered agent failures into actionable workflow improvements.</span>
@@ -575,6 +700,15 @@
         </ol>
       </aside>
     </section>
+
+    <nav class="page-toc" aria-label="On this page">
+      <span>ON THIS PAGE</span>
+      <div>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#mapping">Mapping</a>
+        <a href="#validation">Validation</a>
+      </div>
+    </nav>
 
     <section id="roadmap" class="section" aria-labelledby="roadmap-title">
       <div class="section-head">
