@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Portfolio note on diagnosing AI agent failures in terminal-based tasks and turning them into workflow improvements.">
+  <title>把 Agent 的失败变成可诊断、可迭代的问题</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #fbfaf7;
+      --surface: #ffffff;
+      --surface-soft: #f1efe8;
+      --ink: #222222;
+      --body: #343434;
+      --muted: #5f6368;
+      --line: #dad7cf;
+      --line-soft: #e8e4dc;
+      --blue: #3b5b76;
+      --blue-soft: #e9eef3;
+      --gold: #b08968;
+      --gold-soft: #f1e6da;
+      --max: 1080px;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(90deg, rgba(218, 215, 207, 0.34) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(218, 215, 207, 0.24) 1px, transparent 1px),
+        var(--bg);
+      background-size: 36px 36px;
+      color: var(--body);
+      font-family: "Segoe UI", "Noto Sans SC", "Microsoft YaHei", Arial, sans-serif;
+      font-size: 16px;
+      line-height: 1.72;
+      text-rendering: optimizeLegibility;
+    }
+
+    a {
+      color: var(--blue);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.22em;
+    }
+
+    a:hover { color: #27465f; }
+
+    h1, h2, h3, p { margin-top: 0; }
+
+    .page {
+      width: min(var(--max), calc(100% - 40px));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid var(--line);
+      background: rgba(251, 250, 247, 0.92);
+      backdrop-filter: blur(12px);
+    }
+
+    .nav {
+      width: min(var(--max), calc(100% - 40px));
+      min-height: 58px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .brand {
+      color: var(--ink);
+      font-size: 0.92rem;
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      justify-content: flex-end;
+      font-size: 0.84rem;
+    }
+
+    .nav-links a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .nav-links a:hover { color: var(--blue); }
+
+    .section {
+      padding: clamp(54px, 8vw, 96px) 0;
+      border-top: 1px solid var(--line);
+    }
+
+    .section:first-of-type { border-top: 0; }
+
+    .eyebrow,
+    .kicker,
+    .label {
+      color: var(--blue);
+      font-size: 0.76rem;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow {
+      margin-bottom: 18px;
+    }
+
+    .kicker {
+      margin-bottom: 10px;
+    }
+
+    .section-head {
+      max-width: 760px;
+      margin-bottom: 32px;
+    }
+
+    h1 {
+      max-width: 820px;
+      margin-bottom: 18px;
+      color: var(--ink);
+      font-size: clamp(2.2rem, 5vw, 4.35rem);
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+      font-weight: 720;
+      text-wrap: balance;
+    }
+
+    .subtitle {
+      display: block;
+      margin-top: 16px;
+      color: var(--blue);
+      font-size: clamp(1.02rem, 1.8vw, 1.32rem);
+      line-height: 1.45;
+      font-weight: 560;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin-bottom: 12px;
+      color: var(--ink);
+      font-size: clamp(1.55rem, 3vw, 2.45rem);
+      line-height: 1.18;
+      letter-spacing: -0.02em;
+      font-weight: 700;
+      text-wrap: balance;
+    }
+
+    h3 {
+      color: var(--ink);
+      font-size: 1rem;
+      line-height: 1.38;
+    }
+
+    .lead,
+    .section-head p {
+      color: var(--muted);
+      font-size: 1.02rem;
+      line-height: 1.82;
+      text-wrap: pretty;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+      gap: clamp(32px, 6vw, 72px);
+      align-items: center;
+      min-height: calc(100vh - 58px);
+      padding: clamp(44px, 7vw, 92px) 0;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 9px 15px;
+      border: 1px solid var(--blue);
+      border-radius: 6px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    .button:hover {
+      background: #27465f;
+      color: #fff;
+    }
+
+    .button.secondary {
+      background: transparent;
+      color: var(--blue);
+    }
+
+    .button.secondary:hover {
+      background: var(--blue-soft);
+      color: var(--blue);
+    }
+
+    .challenge-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.86);
+      padding: 28px;
+    }
+
+    .challenge-card h2 {
+      margin-bottom: 16px;
+      font-size: 1.08rem;
+      letter-spacing: 0;
+    }
+
+    .challenge-card ol {
+      margin: 0;
+      padding-left: 20px;
+      color: var(--muted);
+    }
+
+    .challenge-card li {
+      padding-left: 6px;
+      margin-bottom: 12px;
+    }
+
+    .challenge-card li:last-child { margin-bottom: 0; }
+
+    .roadmap {
+      position: relative;
+      display: grid;
+      gap: 18px;
+      margin-top: 6px;
+    }
+
+    .roadmap::before {
+      content: "";
+      position: absolute;
+      left: 25px;
+      top: 22px;
+      bottom: 22px;
+      width: 1px;
+      background: var(--line);
+    }
+
+    .roadmap-step {
+      position: relative;
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    .node {
+      position: relative;
+      z-index: 1;
+      width: 52px;
+      height: 52px;
+      border: 1px solid var(--blue);
+      border-radius: 50%;
+      background: var(--bg);
+      color: var(--blue);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      font-size: 0.86rem;
+    }
+
+    .step-body {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.88);
+      padding: 20px 22px;
+    }
+
+    .step-title {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .step-title h3 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .step-title span {
+      color: var(--gold);
+      font-size: 0.82rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .step-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .note {
+      border-top: 1px solid var(--line-soft);
+      padding-top: 10px;
+    }
+
+    .note strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--ink);
+      font-size: 0.82rem;
+    }
+
+    .note p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.62;
+    }
+
+    .mapping {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.9);
+      font-size: 0.95rem;
+    }
+
+    .mapping th,
+    .mapping td {
+      padding: 15px 16px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    .mapping th {
+      color: var(--blue);
+      background: var(--surface-soft);
+      font-size: 0.78rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .mapping tr:last-child td { border-bottom: 0; }
+
+    .mapping td:first-child {
+      width: 22%;
+      color: var(--ink);
+      font-weight: 670;
+    }
+
+    .mapping td:nth-child(3) {
+      color: #2f4d66;
+      font-weight: 560;
+    }
+
+    .validation {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(280px, 0.78fr);
+      gap: clamp(28px, 5vw, 56px);
+      align-items: start;
+    }
+
+    .validation-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 22px;
+    }
+
+    .agreement {
+      display: grid;
+      gap: 12px;
+      margin: 18px 0;
+    }
+
+    .agreement-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 16px;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .agreement-row:last-child {
+      border-bottom: 0;
+      padding-bottom: 0;
+    }
+
+    .agreement-row strong {
+      color: var(--ink);
+    }
+
+    .agreement-row span {
+      color: var(--blue);
+      font-size: 1.2rem;
+      font-weight: 720;
+    }
+
+    .docs-list {
+      display: grid;
+      gap: 10px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .docs-list a {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line-soft);
+      color: var(--ink);
+      text-decoration: none;
+    }
+
+    .docs-list a:hover {
+      color: var(--blue);
+    }
+
+    .docs-list small {
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .callout {
+      margin-top: 28px;
+      padding: 18px 20px;
+      border-left: 3px solid var(--gold);
+      background: var(--gold-soft);
+      color: var(--ink);
+      font-weight: 560;
+    }
+
+    .footnote {
+      border-top: 1px solid var(--line);
+      padding: 24px 0 36px;
+      color: var(--muted);
+      font-size: 0.84rem;
+    }
+
+    .footnote-inner {
+      width: min(var(--max), calc(100% - 40px));
+      margin: 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 16px 24px;
+    }
+
+    .footnote p {
+      max-width: 760px;
+      margin: 0;
+    }
+
+    .footnote a {
+      color: var(--muted);
+      text-decoration: none;
+    }
+
+    .footnote a:hover { color: var(--blue); }
+
+    @media (max-width: 860px) {
+      .hero,
+      .validation {
+        grid-template-columns: 1fr;
+        min-height: auto;
+      }
+
+      .step-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .mapping {
+        display: block;
+        overflow-x: auto;
+      }
+
+      .mapping table,
+      .mapping tbody,
+      .mapping thead { min-width: 720px; }
+    }
+
+    @media (max-width: 640px) {
+      body { font-size: 15px; }
+
+      .nav {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 12px 0;
+      }
+
+      .nav-links {
+        width: 100%;
+        justify-content: space-between;
+        gap: 10px;
+      }
+
+      .actions,
+      .footnote-inner {
+        flex-direction: column;
+      }
+
+      .button { width: 100%; }
+
+      .roadmap::before { left: 20px; }
+      .roadmap-step { grid-template-columns: 42px minmax(0, 1fr); gap: 14px; }
+      .node { width: 42px; height: 42px; }
+      .agreement-row { grid-template-columns: 1fr; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <nav class="nav" aria-label="Primary navigation">
+      <a class="brand" href="#top">Deep Agents Failure Diagnosis Note</a>
+      <div class="nav-links">
+        <a href="#roadmap">Roadmap</a>
+        <a href="#mapping">Mapping</a>
+        <a href="#validation">Validation</a>
+        <a data-repo-link href="README.md">GitHub</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="top" class="page">
+    <section class="hero" aria-labelledby="hero-title">
+      <div>
+        <p class="eyebrow">Portfolio note · Deep Agents / Terminal-Bench</p>
+        <h1 id="hero-title">
+          把 Agent 的失败变成可诊断、可迭代的问题
+          <span class="subtitle">Turning scattered agent failures into actionable workflow improvements.</span>
+        </h1>
+        <p class="lead">
+          在 Deep Agents / Terminal-Bench 项目中，我关注的不是单次任务有没有跑通，而是当 Agent 在复杂 terminal task 中频繁失败时，如何判断失败集中在哪里、为什么失败，以及下一轮应该优化 prompt、tool、环境还是评测流程。
+        </p>
+        <div class="actions">
+          <a class="button" href="#roadmap">看诊断路线图</a>
+          <a class="button secondary" href="#validation">查看验证与文档</a>
+        </div>
+      </div>
+
+      <aside class="challenge-card" aria-label="The real challenge">
+        <p class="label">The real challenge</p>
+        <h2>真正难点不是 fail，而是不知道为什么 fail</h2>
+        <ol>
+          <li>Agent 失败率高，但原因并不单一。</li>
+          <li>pass/fail 只能说明结果，不能说明原因。</li>
+          <li>模型、环境、输出契约、调试策略和评测边界混在一起。</li>
+          <li>如果不做诊断，下一步优化只能靠猜。</li>
+          <li>目标是把失败转成可行动线索。</li>
+        </ol>
+      </aside>
+    </section>
+
+    <section id="roadmap" class="section" aria-labelledby="roadmap-title">
+      <div class="section-head">
+        <p class="kicker">Roadmap</p>
+        <h2 id="roadmap-title">从失败记录到优化动作</h2>
+        <p>
+          这条路线图把人机分工嵌入每一步：系统提供执行与反馈，我负责判断失败是否代表真实模式，并把诊断转成下一轮 workflow 调整。
+        </p>
+      </div>
+
+      <div class="roadmap">
+        <article class="roadmap-step">
+          <div class="node">01</div>
+          <div class="step-body">
+            <div class="step-title"><h3>Agent Runs</h3><span>execution</span></div>
+            <div class="step-grid">
+              <div class="note"><strong>发生了什么</strong><p>Agent 在真实 terminal task 中执行任务，生成代码、运行命令、处理报错并产出结果。</p></div>
+              <div class="note"><strong>AI / 系统做什么</strong><p>读取任务、操作环境、尝试实现和自检。</p></div>
+              <div class="note"><strong>我的判断</strong><p>关注任务目标是否被正确理解，以及执行过程是否偏离验收要求。</p></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="roadmap-step">
+          <div class="node">02</div>
+          <div class="step-body">
+            <div class="step-title"><h3>Verifier Result</h3><span>outcome</span></div>
+            <div class="step-grid">
+              <div class="note"><strong>发生了什么</strong><p>benchmark verifier 判断任务是否通过，但 pass/fail 本身不解释失败原因。</p></div>
+              <div class="note"><strong>AI / 系统做什么</strong><p>返回验收结果、测试失败信息或运行异常。</p></div>
+              <div class="note"><strong>我的判断</strong><p>不把 fail 当成终点，而是把它作为诊断入口。</p></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="roadmap-step">
+          <div class="node">03</div>
+          <div class="step-body">
+            <div class="step-title"><h3>Failure Sampling</h3><span>evidence</span></div>
+            <div class="step-grid">
+              <div class="note"><strong>发生了什么</strong><p>从失败 runs 中抽取关键轨迹、错误信息、输出产物和 verifier 反馈。</p></div>
+              <div class="note"><strong>AI / 系统做什么</strong><p>提供运行轨迹、命令结果、错误输出和工件状态。</p></div>
+              <div class="note"><strong>我的判断</strong><p>筛选能代表问题模式的失败案例，避免被单个偶然错误带偏。</p></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="roadmap-step">
+          <div class="node">04</div>
+          <div class="step-body">
+            <div class="step-title"><h3>Human Review</h3><span>judgment</span></div>
+            <div class="step-grid">
+              <div class="note"><strong>发生了什么</strong><p>人工复核失败案例，判断失败发生在模型理解、环境、契约、调试策略还是评测边界。</p></div>
+              <div class="note"><strong>AI / 系统做什么</strong><p>暴露可观察证据，但不替代最终归因。</p></div>
+              <div class="note"><strong>我的判断</strong><p>建立人工判断标准，避免把环境或评测问题误判成模型能力问题。</p></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="roadmap-step">
+          <div class="node">05</div>
+          <div class="step-body">
+            <div class="step-title"><h3>Failure Diagnosis</h3><span>taxonomy</span></div>
+            <div class="step-grid">
+              <div class="note"><strong>发生了什么</strong><p>将失败归入可比较的类别，例如 contract mismatch、environment failure、debug loop drift、task meaning error。</p></div>
+              <div class="note"><strong>AI / 系统做什么</strong><p>辅助整理 evidence pack 和候选诊断标签。</p></div>
+              <div class="note"><strong>我的判断</strong><p>把分散失败变成可统计、可复查、可讨论的诊断标签。</p></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="roadmap-step">
+          <div class="node">06</div>
+          <div class="step-body">
+            <div class="step-title"><h3>Optimization Decision</h3><span>action</span></div>
+            <div class="step-grid">
+              <div class="note"><strong>发生了什么</strong><p>根据集中失败类型决定下一轮优化 prompt、tool protocol、environment constraint、post-run check 或 verifier boundary。</p></div>
+              <div class="note"><strong>AI / 系统做什么</strong><p>执行修订后的流程并产生下一轮可比较结果。</p></div>
+              <div class="note"><strong>我的判断</strong><p>把诊断结果转化为具体 workflow 调整，而不是盲目换模型或继续试错。</p></div>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section id="mapping" class="section" aria-labelledby="mapping-title">
+      <div class="section-head">
+        <p class="kicker">Failure → Action Mapping</p>
+        <h2 id="mapping-title">从失败类型到优化动作</h2>
+        <p>
+          首页不展开过细技术案例，只保留失败类型与下一步动作的对应关系。更具体的 WAL、长时间调试、矩阵形状等案例放在 supporting docs。
+        </p>
+      </div>
+
+      <table class="mapping">
+        <thead>
+          <tr>
+            <th>Failure type</th>
+            <th>What it means</th>
+            <th>What to change</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Contract mismatch</td>
+            <td>产物看起来对，但路径、格式或接口不符合验收。</td>
+            <td>加强输出契约和 post-run check。</td>
+          </tr>
+          <tr>
+            <td>Environment failure</td>
+            <td>依赖、权限、限流或环境配置导致任务失败。</td>
+            <td>隔离环境问题，不误判成模型能力失败。</td>
+          </tr>
+          <tr>
+            <td>Debug loop drift</td>
+            <td>Agent 局部修补很多，但没有改变失败策略。</td>
+            <td>设置停止条件，回到 strategy-level 修正。</td>
+          </tr>
+          <tr>
+            <td>Task meaning error</td>
+            <td>方法合理，但理解错了任务目标。</td>
+            <td>改任务解析和隐藏约束提取。</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section id="validation" class="section" aria-labelledby="validation-title">
+      <div class="validation">
+        <div>
+          <p class="kicker">Validation + Docs</p>
+          <h2 id="validation-title">这套诊断是否可靠？</h2>
+          <p>
+            这些数字不是 leaderboard 成绩，而是用来检查诊断标签与人工判断的一致性。任务通过率快照和更细证据放在详细文档中，不在主页展开。
+          </p>
+          <div class="validation-card">
+            <p class="label">Did the diagnosis align with human review?</p>
+            <div class="agreement">
+              <div class="agreement-row"><strong>Development</strong><span>88% strict / 92% relaxed</span></div>
+              <div class="agreement-row"><strong>Test</strong><span>70% strict / 75% relaxed</span></div>
+            </div>
+            <p>
+              这些结果说明：诊断体系已经能捕捉一部分稳定模式，同时 test gap 也保留了继续细化判断边界的空间。
+            </p>
+          </div>
+          <div class="callout">
+            最大收获：优化 Agent 不是盲目换模型，而是先知道失败属于系统的哪一层。
+            <br>
+            <span>Key takeaway: improving an agent is not just about switching to a stronger model. It starts with knowing which layer of the system failed.</span>
+          </div>
+        </div>
+
+        <aside class="validation-card">
+          <p class="label">Supporting documents</p>
+          <ul class="docs-list">
+            <li><a data-doc-path="README.md" href="README.md"><span>README</span><small>overview</small></a></li>
+            <li><a data-doc-path="docs/case_study.md" href="docs/case_study.md"><span>Case study</span><small>project note</small></a></li>
+            <li><a data-doc-path="docs/evaluation.md" href="docs/evaluation.md"><span>Evaluation notes</span><small>diagnosis details</small></a></li>
+            <li><a data-doc-path="docs/failure_cases.md" href="docs/failure_cases.md"><span>Failure cases</span><small>examples</small></a></li>
+            <li><a data-doc-path="sanitized_examples/example_agent_trace.md" href="sanitized_examples/example_agent_trace.md"><span>Sanitized trace</span><small>trajectory</small></a></li>
+            <li><a data-doc-path="assets/result_table.md" href="assets/result_table.md"><span>Result table</span><small>snapshots</small></a></li>
+            <li><a data-repo-link href="README.md"><span>GitHub repository</span><small>source</small></a></li>
+          </ul>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footnote">
+    <div class="footnote-inner">
+      <p>
+        本页面使用公开 benchmark 数据集相关结果。出于隐私与安全考虑，个人信息、本地路径、环境配置、凭证和原始本地运行轨迹不包含在公开仓库中。
+      </p>
+      <a data-repo-link href="README.md">GitHub repository</a>
+    </div>
+  </footer>
+
+  <script>
+    (function () {
+      var manualRepositoryUrl = "https://github.com/mogwai911/agent-failure-diagnosis-case-study";
+      var defaultBranch = "main";
+
+      function inferRepositoryUrl() {
+        var host = window.location.hostname;
+        var pathParts = window.location.pathname.split("/").filter(Boolean);
+        if (host.endsWith(".github.io") && pathParts.length > 0) {
+          var owner = host.replace(".github.io", "");
+          var repo = pathParts[0];
+          return "https://github.com/" + owner + "/" + repo;
+        }
+        return manualRepositoryUrl || "";
+      }
+
+      var repositoryUrl = inferRepositoryUrl();
+      document.querySelectorAll("[data-repo-link]").forEach(function (link) {
+        if (repositoryUrl) {
+          link.setAttribute("href", repositoryUrl);
+          link.setAttribute("target", "_blank");
+          link.setAttribute("rel", "noopener noreferrer");
+        }
+      });
+
+      document.querySelectorAll("[data-doc-path]").forEach(function (link) {
+        var docPath = link.getAttribute("data-doc-path");
+        if (repositoryUrl && docPath) {
+          var target = docPath.toLowerCase() === "readme.md"
+            ? repositoryUrl + "#readme"
+            : repositoryUrl + "/blob/" + defaultBranch + "/" + docPath;
+          link.setAttribute("href", target);
+          link.setAttribute("target", "_blank");
+          link.setAttribute("rel", "noopener noreferrer");
+        }
+      });
+    }());
+  </script>
+</body>
+</html>

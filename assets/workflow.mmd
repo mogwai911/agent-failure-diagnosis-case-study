@@ -1,0 +1,14 @@
+flowchart TD
+    A[Task input] --> B[Agent understands goal]
+    B --> C[Generate execution plan]
+    C --> D[Run commands in terminal]
+    D --> E{Execution feedback}
+    E -->|Error or missing evidence| F[Debug and revise plan]
+    F --> D
+    E -->|Artifact produced| G[Run external verifier]
+    G --> H{Pass or fail}
+    H -->|Pass| I[Record success]
+    H -->|Fail| J[Extract minimal evidence pack]
+    J --> K[Assign L1 and L2 diagnosis]
+    K --> L[Choose one workflow change]
+    L --> D
